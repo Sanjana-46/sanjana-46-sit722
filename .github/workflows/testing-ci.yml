@@ -1,0 +1,94 @@
+﻿name: CI on testing + push images
+
+on:
+  push:
+    branches: [ "testing" ]
+
+env:
+  ACR_NAME: ${{ secrets.ACR_NAME }}
+  AZURE_RG: ${{ secrets.AZURE_RG }}
+  AZURE_REGION: ${{ secrets.AZURE_REGION }}
+
+jobs:
+  test_build_push:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create test databases
+        run: |
+          for db in products orders customers; do
+            PGPASSWORD=postgres psql -h localhost -U postgres -p 5432 -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
+              PGPASSWORD=postgres psql -h localhost -U postgres -p 5432 -c "CREATE DATABASE ${db};"
+          done
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps & run tests (product)
+        working-directory: backend/product_service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+          pytest -q
+
+      - name: Install deps & run tests (order)
+        working-directory: backend/order_service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+          pytest -q
+
+      - name: Install deps & run tests (customer)
+        working-directory: backend/customer_service
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+          pytest -q
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: ACR login (uses SP from azure/login)
+        run: |
+          az acr login -n $ACR_NAME
+
+      - name: Build & push images to ACR
+        run: |
+          LOGIN_SERVER=$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)
+
+          docker build -t ${LOGIN_SERVER}/product-service:testing ./backend/product_service
+          docker push ${LOGIN_SERVER}/product-service:testing
+
+          docker build -t ${LOGIN_SERVER}/order-service:testing ./backend/order_service
+          docker push ${LOGIN_SERVER}/order-service:testing
+
+          docker build -t ${LOGIN_SERVER}/customer-service:testing ./backend/customer_service
+          docker push ${LOGIN_SERVER}/customer-service:testing
+
+          docker build -t ${LOGIN_SERVER}/frontend:testing ./frontend
+          docker push ${LOGIN_SERVER}/frontend:testing
