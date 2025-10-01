@@ -12,6 +12,14 @@ env:
 jobs:
   test_build_push:
     runs-on: ubuntu-latest
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PRODUCTS_DB: products
+      ORDERS_DB: orders
+      CUSTOMERS_DB: customers
     services:
       postgres:
         image: postgres:16-alpine
@@ -35,11 +43,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
+      - name: Wait for Postgres readiness
+        run: |
+          for i in {1..30}; do
+            PGPASSWORD=$PGPASSWORD psql -h $PGHOST -U $PGUSER -p $PGPORT -c "SELECT 1" && break
+            echo "waiting for postgres..."
+            sleep 2
+          done
+
       - name: Create test databases
         run: |
-          for db in products orders customers; do
-            PGPASSWORD=postgres psql -h localhost -U postgres -p 5432 -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
-              PGPASSWORD=postgres psql -h localhost -U postgres -p 5432 -c "CREATE DATABASE ${db};"
+          for db in $PRODUCTS_DB $ORDERS_DB $CUSTOMERS_DB; do
+            PGPASSWORD=$PGPASSWORD psql -h $PGHOST -U $PGUSER -p $PGPORT -tc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1 || \
+              PGPASSWORD=$PGPASSWORD psql -h $PGHOST -U $PGUSER -p $PGPORT -c "CREATE DATABASE ${db};"
           done
 
       - name: Set up Python
@@ -49,23 +65,29 @@ jobs:
 
       - name: Install deps & run tests (product)
         working-directory: backend/product_service
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/products
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt pytest psycopg2-binary
           pytest -q
 
       - name: Install deps & run tests (order)
         working-directory: backend/order_service
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/orders
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt pytest psycopg2-binary
           pytest -q
 
       - name: Install deps & run tests (customer)
         working-directory: backend/customer_service
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/customers
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt pytest psycopg2-binary
           pytest -q
 
       - name: Azure Login
@@ -73,7 +95,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: ACR login (uses SP from azure/login)
+      - name: ACR login
         run: |
           az acr login -n $ACR_NAME
 
