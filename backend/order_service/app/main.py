@@ -625,3 +625,14 @@ def get_order_items(order_id: int, db: Session = Depends(get_db)):
         f"Order Service: Retrieved {len(order.items)} items for order {order_id}."
     )
     return order.items
+# ----- inserted for tests -----
+import os  # added for PRODUCT_SERVICE_URL
+
+try:
+    app  # if already defined, do nothing
+except NameError:
+    from fastapi import FastAPI
+    app = FastAPI()
+
+PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8001")
+# ----- end inserted -----
