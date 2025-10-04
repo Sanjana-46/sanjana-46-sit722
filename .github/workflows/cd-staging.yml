@@ -1,9 +1,30 @@
-﻿name: CD – staging
+name: CD – staging
+
 on:
-  push: { branches: [main] }
+  push:
+    branches: [ "main" ]
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: echo 'Helm deploy to staging'
+    - uses: actions/checkout@v4
+
+    - name: Azure login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+
+    - name: Get AKS credentials
+      run: az aks get-credentials --resource-group ${{ secrets.AKS_RG }} --name ${{ secrets.AKS_CLUSTER }} --overwrite-existing
+
+    - name: Helm deploy to staging
+      run: |
+        helm upgrade --install sit722-103hd ./helm \
+          --namespace staging \
+          --create-namespace \
+          --set image.repository=${{ secrets.ACR_LOGIN_SERVER }}/product-service \
+          --set image.tag=latest
