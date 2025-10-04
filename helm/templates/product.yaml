@@ -1,0 +1,13 @@
+﻿apiVersion: apps/v1
+kind: Deployment
+metadata: { name: product-service }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: product-service } }
+  template:
+    metadata: { labels: { app: product-service } }
+    spec:
+      containers:
+        - name: product
+          image: {{ .Values.imageRegistry }}/{{ .Values.images.product_service }}
+          ports: [{containerPort: 5000}]

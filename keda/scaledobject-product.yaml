@@ -1,0 +1,18 @@
+﻿apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: product-prometheus-scale
+  namespace: staging
+spec:
+  scaleTargetRef:
+    kind: Deployment
+    name: product-service
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+        metricName: http_requests_total
+        threshold: "10"
+        query: sum(rate(http_requests_total{app="product_service"}[2m]))

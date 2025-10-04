@@ -1,0 +1,5 @@
+imageRegistry: "sit722studentacr.azurecr.io"
+images:
+  product_service: "product-service:latest"
+  order_service: "order-service:latest"
+replicaCount: 1

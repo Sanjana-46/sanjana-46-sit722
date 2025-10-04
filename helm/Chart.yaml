@@ -1,0 +1,6 @@
+﻿apiVersion: v2
+name: sit722-103hd
+description: Helm chart for SIT722 10.3HD
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
